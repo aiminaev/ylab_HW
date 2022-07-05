@@ -1,236 +1,336 @@
-import sys
-import pygame
+from tkinter import *
+from tkinter import messagebox
+import time
 import random
 
-"""
-Игра 'Обратные крестики-нолики'.
-"""
-
-RED = (255, 0, 0)
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-BLUE = (0, 0, 255)
-
-X = 10
-Y = 10
-PLAY_BOARD = [[0] * 10 for i in range(10)]
-GAME_OVER = False
-
-SIZE = (510, 510)
-MARGIN = 10
-WIDTH = HEIGHT = 40
-size_window = (WIDTH, HEIGHT)
-
-FILLED_POINTS = []
-
-USER = 'X'
-AI = 'O'
-
-
-def user_input(x_mouse: int, y_mouse: int) -> tuple or bool:
-    """
-    Определение координат ячейки по параметрам клика игрока, проверка ячейки и проставление маркера
-    :param x_mouse: первый параметр клика
-    :param y_mouse: второй параметр клика
-    :return: tuple координат или None если ячейка занята
-    """
-    col = x_mouse // (MARGIN + WIDTH)
-    if col == X:
-        col -= 1
-    row = y_mouse // (MARGIN + HEIGHT)
-    if row == Y:
-        row -= 1
-    coordinates = (row, col)
-    if coordinates not in FILLED_POINTS:
-        PLAY_BOARD[row][col] = USER
-        FILLED_POINTS.append(coordinates)
-        return coordinates
-    return None
+# Tkinter parameters
+tk = Tk()
+app_running = True
+tk.title("BackTicTacToe")
+tk.resizable(0, 0)
+tk.wm_attributes("-topmost", 1)
+# Game and field parameters
+size_canvas = 761
+s_xy = 10  # Number of cells
+save = 0
+step = size_canvas // s_xy
+points = [[-1 for i in range(s_xy)] for i in range(s_xy)]
+list_ids = []
+type = 0  # Tic or Tac
+turn = 1  # Player or computer
+AI_table = []  # AI step table
+for y in range(s_xy):
+    for x in range(s_xy):
+        AI_table.append([step * x + step // 2, step * y + step // 2])
+canvas = Canvas(tk, width=size_canvas, height=size_canvas, bd=0,
+                highlightthickness=0)
+canvas.create_rectangle(0, 0, size_canvas, size_canvas, fill="white")
+canvas.pack()
 
 
-def ai_input() -> tuple:
-    """
-    Генерация координат для хода компьютера, проверка ячейки и проставление маркера
-    :return tuple с координатами выбранной ячейки
-    """
-    global PLAY_BOARD
-    while True:
-        x = random.randrange(X)
-        y = random.randrange(Y)
-        if (x, y) not in FILLED_POINTS:
-            FILLED_POINTS.append((x, y))
-            PLAY_BOARD[x][y] = AI
-            return x, y
+def on_closing():
+    """This function for cool closing app"""
+    global app_running
+    if messagebox.askokcancel("Are you sure ? ", "Do you want to exit ?"):
+        app_running = False
+        tk.destroy()
 
 
-def get_diagonal1(x: int, y: int) -> list:
-    """
-    Определение первой диагонали от выбранной ячейки
-    :param x: строка выбранной ячейки
-    :param y: столбец выбранной ячейки
-    :return: список данных первой диагонали от выбранной ячейки
-    """
-    diagonal = []
-    while 0 < x and 0 < y:
-        x -= 1
-        y -= 1
-    while x < 10 and y < 10:
-        diagonal.append(PLAY_BOARD[x][y])
-        x += 1
-        y += 1
-    return diagonal
+tk.protocol("WM_DELETE_WINDOW", on_closing)
 
 
-def get_diagonal2(x: int, y: int) -> list:
-    """
-    Определение второй диагонали от выбранной ячейки
-    :param x: строка выбранной ячейки
-    :param y: столбец выбранной ячейки
-    :return: список второй диагонали от выбранной ячейки
-    """
-    diagonal = []
-    while x < 10 - 1 and 0 < y:
-        x += 1
-        y -= 1
-    while 0 <= x and y < 10:
-        diagonal.append(PLAY_BOARD[x][y])
-        x -= 1
-        y += 1
-    return diagonal
+def draw_table():
+    """This function draw all lines"""
+    for i in range(0, s_xy + 1):
+        canvas.create_line(0, i * step, size_canvas, i * step)
+    for i in range(0, s_xy + 1):
+        canvas.create_line(i * step, 0, i * step, size_canvas)
 
 
-def check_losing(symbol: str, coordinate: tuple) -> str or bool:
-    """
-    Обработка параметров клика игрока и отправка на проверку списков от выбранной ячейки с горизонтальным,
-    вертикальным и диагональными линиями на наличие проигрышной комбинации:return: строковые параметры окончания игры
-    или булево значение False если условие для окончания игры не выполнено
-    """
-    if coordinate:
-        x = coordinate[0]
-        y = coordinate[1]
-
-        if check_list([PLAY_BOARD[x][y] for y in range(10)], symbol) \
-                or check_list([PLAY_BOARD[x][y] for x in range(10)], symbol) \
-                or check_list(get_diagonal1(x, y), symbol) \
-                or check_list(get_diagonal2(x, y), symbol):
-            return f'{symbol} проиграл. Нажмите пробел для новой игры'
-
-        if check_draw():
-            return 'Ничья! Нажмите пробел для новой игры'
-    return False
+def button_press():
+    """New game"""
+    global list_ids
+    global points
+    for i in list_ids:
+        canvas.delete(i)
+    list_ids = []
+    points = [[-1 for i in range(s_xy)] for i in range(s_xy)]
 
 
-def check_list(lst: list, symbol: str) -> bool:
-    """
-    Проверка списка на наличие проигрышной комбинации.
-    :return: булево значение True/False
-    """
-    sum = 0
-    for item in lst:
-        if item == symbol:
-            sum += 1
-            if sum >= 5:
-                return True
-        else:
-            sum = 0
-    return False
+def button_tic():
+    """Play as Tic"""
+    global type
+    button_press()
+    type = 0
 
 
-def check_draw() -> bool:
-    """
-    Проверка игрового поля на Ничью
-    :return: булево значение True/False
-    """
-    if len(FILLED_POINTS) == 100:
-        return True
-    return False
+def button_tak():
+    """Play as Tak"""
+    global type
+    button_press()
+    type = 1
 
 
-def game_over(message: str):
-    """
-    Отрисовка окончания игры согласно полученным в сообщении данным
-    """
-    global GAME_OVER
-    GAME_OVER = True
-    screen.fill(BLACK)
-    font = pygame.font.SysFont('stxingkai', 30)
-    text1 = font.render(message, True, WHITE)
-    text_rect = text1.get_rect()
-    text_x = screen.get_width() / 2 - text_rect.width / 2
-    text_y = screen.get_height() / 2 - text_rect.height / 2
-    screen.blit(text1, [text_x, text_y])
+# Buttons
+f_bot = Frame(tk)
+b_tic = Button(f_bot, bg='yellow', text="Play as Tic", command=button_tic)
+b_tok = Button(f_bot, bg='yellow', text="Play as Tak", command=button_tak)
+b1 = Button(f_bot, bg='green', text="New game!", command=button_press)
+f_bot.pack()
+b_tic.pack(side=LEFT, padx=10)
+b1.pack(side=LEFT)
+b_tok.pack(side=LEFT, padx=10)
+tk.update()
 
 
-def new_game():
-    """
-    Сброс финальных параметров и отрисовка нового игрового поля
-    """
-    global GAME_OVER, PLAY_BOARD
-    PLAY_BOARD = [[0] * 10 for _ in range(10)]
-    FILLED_POINTS.clear()
-    GAME_OVER = False
-    screen.fill(BLACK)
+def step_player(event):
+    """This function add tic or tac from player"""
+    global points
+    global type
+    global turn
+    if points[event.x // step][event.y // step] == -1 or \
+            points[event.x // step][event.y // step] == -2:
+        points[event.x // step][event.y // step] = type
+        draw_point(event.x // step, event.y // step, type)
+        if check_winner(type):
+            print("Computer is winner!")
+            # print(points)
+            points = [[10 for i in range(s_xy)] for i in range(s_xy)]
+        turn = 0
+        type = (int(not type))
 
 
-def graphic_render():
-    """
-    Графическая отрисовка символов и ячеек X и O
-    """
-    global PLAY_BOARD
-    for row in range(10):
-        for col in range(10):
-            if PLAY_BOARD[row][col] == USER:
-                color = RED
-            elif PLAY_BOARD[row][col] == AI:
-                color = BLUE
-            else:
-                color = WHITE
-            x = col * WIDTH + (col + 1) * MARGIN
-            y = row * HEIGHT + (row + 1) * MARGIN
-            pygame.draw.rect(screen, color, (x, y, WIDTH, HEIGHT))
-            if color == RED:
-                pygame.draw.line(screen, WHITE, (x, y), (x + WIDTH, y + HEIGHT), 2)
-                pygame.draw.line(screen, WHITE, (x + WIDTH, y), (x, y + HEIGHT), 2)
-            elif color == BLUE:
-                pygame.draw.circle(screen, WHITE, (x + WIDTH // 2, y + HEIGHT // 2), WIDTH // 2, 2)
+def step_ai():
+    global points
+    global type
+    global turn
+    global save
+    if turn == 0:
+        rand = random.randint(0, 99)
+        if points[AI_table[rand][0] // step][AI_table[rand][1] // step] == -1:
+            points[AI_table[rand][0] // step][AI_table[rand][1] // step] = type
+            if check_winner(type) == 0:
+                draw_point(AI_table[rand][0] // step,
+                           AI_table[rand][1] // step, type)
+                turn = 1
+                type = (int(not type))
+                # print(f"turn {turn}")
+                # print(f"type {type}")
+            if check_winner(type) == 1:
+                points[AI_table[rand][0] \
+                       // step][AI_table[rand][1] // step] = -2
+                if save < 3:
+                    save = save + 1
+                    # print(f"save {save}")
+                else:
+                    print("Player is winner!")
+                    draw_point(AI_table[rand][0] // step,
+                               AI_table[rand][1] // step, type)
+                    save = 0
+                    points = [[10 for i in range(s_xy)] for i in range(s_xy)]
 
 
-if __name__ == '__main__':
+def draw_point(x, y, type):
+    """This function draw tic or tac"""
+    size = 25
+    id = 0
+    if type == 0:
+        color = "red"
+        id = canvas.create_oval(x * step, y * step, x * step + step,
+                                y * step + step, fill=color)
+        id2 = canvas.create_oval(x * step + size, y * step + size,
+                                 x * step + step - size,
+                                 y * step + step - size, fill="white")
+        list_ids.append(id)
+        list_ids.append(id2)
+    if type == 1:
+        color = "blue"
+        id = canvas.create_rectangle(x * step,
+                                     y * step + step // 2 - step // 10,
+                                     x * step + step,
+                                     y * step + step // 2 + step // 10,
+                                     fill=color)
+        id2 = canvas.create_rectangle(x * step + step // 2 - step // 10,
+                                      y * step,
+                                      x * step + step // 2 + step // 10,
+                                      y * step + step, fill=color)
+        list_ids.append(id)
+        list_ids.append(id2)
 
-    # Генерация игровой доски и инициализация стартовых игровых параметров
-    screen = pygame.display.set_mode(SIZE)
-    pygame.display.set_caption("Обратные Крестики-Нолики")
 
-    pygame.init()
-    while True:
-        coordinates = None
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit(0)
+def check_winner(who):
+    """The function determines who is winner"""
+    win = False
+    # Horizontal check
+    for i in range(0, s_xy):
+        for j in range(0, s_xy // 2 + 1):
+            if points[i][j] == who and \
+                    points[i][j + 1] == who and \
+                    points[i][j + 2] == who and \
+                    points[i][j + 3] == who and \
+                    points[i][j + 4] == who:
+                win = True
+    # Vertical check
+    for i in range(0, s_xy // 2 + 1):
+        for j in range(0, s_xy):
+            if points[i][j] == who and \
+                    points[i + 1][j] == who and \
+                    points[i + 2][j] == who and \
+                    points[i + 3][j] == who and \
+                    points[i + 4][j] == who:
+                win = True
+    # All diagonals check
+    for i in range(6):
+        if points[i][i] == who and \
+                points[i + 1][i + 1] == who and \
+                points[i + 2][i + 2] == who and \
+                points[i + 3][i + 3] == who and \
+                points[i + 4][i + 4] == who:
+            win = True
+        if points[-1 - i][i + 0] == who and \
+                points[-2 - i][i + 1] == who and \
+                points[-3 - i][i + 2] == who and \
+                points[-4 - i][i + 3] == who and \
+                points[-5 - i][i + 4] == who:
+            win = True
+        if i < 5:
+            if points[i + 1][i] == who and \
+                    points[i + 2][i + 1] == who and \
+                    points[i + 3][i + 2] == who and \
+                    points[i + 4][i + 3] == who and \
+                    points[i + 5][i + 4] == who:
+                win = True
+            if points[i][i + 1] == who and \
+                    points[i + 1][i + 2] == who and \
+                    points[i + 2][i + 3] == who and \
+                    points[i + 3][i + 4] == who and \
+                    points[i + 4][i + 5] == who:
+                win = True
+            if points[i][-2 - i] == who and \
+                    points[i + 1][-3 - i] == who and \
+                    points[i + 2][-4 - i] == who and \
+                    points[i + 3][-5 - i] == who and \
+                    points[i + 4][-6 - i] == who:
+                win = True
+            if points[i + 1][-1 - i] == who and \
+                    points[i + 2][-2 - i] == who and \
+                    points[i + 3][-3 - i] == who and \
+                    points[i + 4][-4 - i] == who and \
+                    points[i + 5][-5 - i] == who:
+                win = True
+        if i < 4:
+            if points[i + 2][i] == who and \
+                    points[i + 3][i + 1] == who and \
+                    points[i + 4][i + 2] == who and \
+                    points[i + 5][i + 3] == who and \
+                    points[i + 6][i + 4] == who:
+                win = True
+            if points[i][i + 2] == who and \
+                    points[i + 1][i + 3] == who and \
+                    points[i + 2][i + 4] == who and \
+                    points[i + 3][i + 5] == who and \
+                    points[i + 4][i + 6] == who:
+                win = True
+            if points[i][-3 - i] == who and \
+                    points[i + 1][-4 - i] == who and \
+                    points[i + 2][-5 - i] == who and \
+                    points[i + 3][-6 - i] == who and \
+                    points[i + 4][-7 - i] == who:
+                win = True
+            if points[i + 2][-1 - i] == who and \
+                    points[i + 3][-2 - i] == who and \
+                    points[i + 4][-3 - i] == who and \
+                    points[i + 5][-4 - i] == who and \
+                    points[i + 6][-5 - i] == who:
+                win = True
+        if i < 3:
+            if points[i + 3][i] == who and \
+                    points[i + 4][i + 1] == who and \
+                    points[i + 5][i + 2] == who and \
+                    points[i + 6][i + 3] == who and \
+                    points[i + 7][i + 4] == who:
+                win = True
+            if points[i][i + 3] == who and \
+                    points[i + 1][i + 4] == who and \
+                    points[i + 2][i + 5] == who and \
+                    points[i + 3][i + 6] == who and \
+                    points[i + 4][i + 7] == who:
+                win = True
+            if points[i][-4 - i] == who and \
+                    points[i + 1][-5 - i] == who and \
+                    points[i + 2][-6 - i] == who and \
+                    points[i + 3][-7 - i] == who and \
+                    points[i + 4][-8 - i] == who:
+                win = True
+            if points[i + 3][-1 - i] == who and \
+                    points[i + 4][-2 - i] == who and \
+                    points[i + 5][-3 - i] == who and \
+                    points[i + 6][-4 - i] == who and \
+                    points[i + 7][-5 - i] == who:
+                win = True
+        if i < 2:
+            if points[i + 4][i] == who and \
+                    points[i + 5][i + 1] == who and \
+                    points[i + 6][i + 2] == who and \
+                    points[i + 7][i + 3] == who and \
+                    points[i + 8][i + 4] == who:
+                win = True
+            if points[i][i + 4] == who and \
+                    points[i + 1][i + 5] == who and \
+                    points[i + 2][i + 6] == who and \
+                    points[i + 3][i + 7] == who and \
+                    points[i + 4][i + 8] == who:
+                win = True
+            if points[i][-5 - i] == who and \
+                    points[i + 1][-6 - i] == who and \
+                    points[i + 2][-7 - i] == who and \
+                    points[i + 3][-8 - i] == who and \
+                    points[i + 4][-9 - i] == who:
+                win = True
+            if points[i + 4][-1 - i] == who and \
+                    points[i + 5][-2 - i] == who and \
+                    points[i + 6][-3 - i] == who and \
+                    points[i + 7][-4 - i] == who and \
+                    points[i + 8][-5 - i] == who:
+                win = True
+        if i < 1:
+            if points[i + 5][i] == who and \
+                    points[i + 6][i + 1] == who and \
+                    points[i + 7][i + 2] == who and \
+                    points[i + 8][i + 3] == who and \
+                    points[i + 9][i + 4] == who:
+                win = True
+            if points[i][i + 5] == who and \
+                    points[i + 1][i + 6] == who and \
+                    points[i + 2][i + 7] == who and \
+                    points[i + 3][i + 8] == who and \
+                    points[i + 4][i + 9] == who:
+                win = True
+            if points[i][-6 - i] == who and \
+                    points[i + 1][-7 - i] == who and \
+                    points[i + 2][-8 - i] == who and \
+                    points[i + 3][-9 - i] == who and \
+                    points[i + 4][-10 - i] == who:
+                win = True
+            if points[i + 5][-1 - i] == who and \
+                    points[i + 6][-2 - i] == who and \
+                    points[i + 7][-3 - i] == who and \
+                    points[i + 8][-4 - i] == who and \
+                    points[i + 9][-5 - i] == who:
+                win = True
+    return win
 
-            # Обработка клика игрока и формирование кортежа с координатами
-            elif event.type == pygame.MOUSEBUTTONDOWN and not GAME_OVER:
-                x_mouse, y_mouse = pygame.mouse.get_pos()
-                coordinates = user_input(x_mouse, y_mouse)
 
-                if coordinates is not None:
-                    # Проверка хода игрока на проигрышную комбинацию
-                    player_game_over = check_losing(USER, coordinates)
-                    if player_game_over:
-                        game_over(player_game_over)
+draw_table()
 
-                    ai_coordinates = ai_input()
-                    # Проверка хода компьютера на проигрышную комбинацию
-                    ai_game_over = check_losing(AI, ai_coordinates)
-                    if ai_game_over:
-                        game_over(ai_game_over)
+# Real time
+while app_running:
+    if turn == 1:
+        canvas.bind_all("<Button-1>", step_player)  # ЛКМ
+    elif turn == 0:
+        step_ai()
 
-            # Определение и обработка параметра запуска новой игры
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                new_game()
-        # Графическая отрисовка символов X или O
-        if not GAME_OVER:
-            graphic_render()
-
-        pygame.display.update()
+    if app_running:
+        tk.update_idletasks()
+        tk.update()
+        time.sleep(0.00005)
